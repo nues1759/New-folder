@@ -1,0 +1,380 @@
+{
+  "name": "Automated Receipt Pipeline with 3-Way Policy Branching",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "cddeff8c-d714-4b06-98b8-5fa4d2fac8f5",
+      "name": "When clicking 'Execute Workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "trashed = false",
+        "filter": {},
+        "options": {}
+      },
+      "id": "14e678c5-9d13-4ba8-8d33-939b653bb283",
+      "name": "Search Receipt Files",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        224,
+        208
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "arxxJIcy3kSrY0nH",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "0cc0a822-18a4-45cc-8e20-e79858d0b8ac",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        448,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {}
+      },
+      "id": "1c105d7f-da29-42eb-8314-00719aa2a495",
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        704,
+        48
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "arxxJIcy3kSrY0nH",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.policy_compliant }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Branch A: Violation Flagged"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.policy_compliant }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.total_amount }}",
+                    "rightValue": 250,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Branch B: High-Value Approval"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.policy_compliant }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.total_amount }}",
+                    "rightValue": 250,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Branch C: Auto-Approved"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bf0f4814-27eb-4d2c-b316-793042db0cbe",
+      "name": "4. Conditional Branching Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1104,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "299d4d63-9c74-477d-94a6-be6b28128669",
+      "name": "Rate Limit Delay",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        208
+      ],
+      "webhookId": "b8928591-e1fd-4a21-b217-a6fc9ba578a5"
+    },
+    {
+      "parameters": {},
+      "id": "a0241f86-846f-4d44-b279-e23307c2abe5",
+      "name": "Log to Rejected Expenses Sheet",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        -80
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "cb8bad8e-209d-474a-8bf2-11000a874b53",
+      "name": "Route to Manager Approval Queue",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        64
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "f731992a-1dd1-4b24-8cee-99e930aca20a",
+      "name": "Append to Approved Ledger",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "document",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash",
+          "mode": "list",
+          "cachedResultName": "Gemini 3.5 Flash"
+        },
+        "text": "You are a Corporate Expense Auditor. Analyze the attached document image/PDF according to company policy rules:\n\nMeals cannot exceed $75 per receipt.\n\nAlcohol and entertainment expenses are strictly prohibited.\n\nAll receipts must clearly show Vendor Name, Date, and Total Amount.\n\nOutput MUST be a single raw JSON object (and nothing else) with these exact keys:\n{\n\"vendor\": string or null,\n\"date\": \"YYYY-MM-DD\" or null,\n\"category\": \"Meals\" | \"Travel\" | \"Office Supplies\" | \"Other\",\n\"total_amount\": number,\n\"policy_compliant\": boolean,\n\"audit_notes\": string\n}\n\n3. Update O",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        208
+      ],
+      "id": "59b41e79-377f-499a-9526-eefe1a9c74c7",
+      "name": "Analyze document",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "V20kf52YBzm7hTcu",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Execute Workflow'": {
+      "main": [
+        [
+          {
+            "node": "Search Receipt Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Receipt Files": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Conditional Branching Switch": {
+      "main": [
+        [
+          {
+            "node": "Log to Rejected Expenses Sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Rate Limit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route to Manager Approval Queue",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Rate Limit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append to Approved Ledger",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Rate Limit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Delay": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Analyze document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze document": {
+      "main": [
+        [
+          {
+            "node": "4. Conditional Branching Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9fe4d852-9cef-440a-8fe5-10e0afbe178f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "nodeGroups": [],
+  "id": "rvcH4fctwKd2tye0",
+  "tags": []
+}
